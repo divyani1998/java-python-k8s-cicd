@@ -4,7 +4,7 @@ on:
 
   push:
     branches:
-      - main
+      - divyani1998-patch-1
 
   workflow_dispatch:
 
