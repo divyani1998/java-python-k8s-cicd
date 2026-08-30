@@ -1,0 +1,150 @@
+name: Java CI/CD to Kubernetes
+
+on:
+
+  push:
+    branches:
+      - main
+
+  workflow_dispatch:
+
+jobs:
+
+  build-scan-deploy:
+
+    # The Ubuntu VM will be configured as this self-hosted runner.
+    runs-on: self-hosted
+
+    steps:
+
+      # -------------------------------------------------------
+      # 1. Checkout source code
+      # -------------------------------------------------------
+      - name: Checkout source code
+        uses: actions/checkout@v4
+
+
+      # -------------------------------------------------------
+      # 2. Configure Java
+      # -------------------------------------------------------
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: maven
+
+
+      # -------------------------------------------------------
+      # 3. Build and test Java application
+      # -------------------------------------------------------
+      - name: Build application
+        run: |
+          mvn clean package
+
+
+      # -------------------------------------------------------
+      # 4. SonarQube code quality analysis
+      # -------------------------------------------------------
+      - name: SonarQube analysis
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        run: |
+          mvn sonar:sonar \
+            -Dsonar.host.url=http://localhost:9000 \
+            -Dsonar.token="$SONAR_TOKEN"
+
+
+      # -------------------------------------------------------
+      # 5. Define Docker image
+      # -------------------------------------------------------
+      - name: Set image name
+        run: |
+          echo "IMAGE_NAME=${{ secrets.REGISTRY }}/hello-docker/hello-java:${GITHUB_SHA}" >> "$GITHUB_ENV"
+
+
+      # -------------------------------------------------------
+      # 6. Build Docker image
+      # -------------------------------------------------------
+      - name: Build Docker image
+        run: |
+          docker build \
+            -t "$IMAGE_NAME" .
+
+
+      # -------------------------------------------------------
+      # 7. Security scan
+      # -------------------------------------------------------
+      - name: Scan Docker image
+        run: |
+          chmod +x scripts/scan-image.sh
+          ./scripts/scan-image.sh "$IMAGE_NAME"
+
+
+      # -------------------------------------------------------
+      # 8. Login to Artifactory
+      # -------------------------------------------------------
+      - name: Login to container registry
+        run: |
+          echo "${{ secrets.REGISTRY_PASSWORD }}" | \
+          docker login "${{ secrets.REGISTRY }}" \
+            --username "${{ secrets.REGISTRY_USERNAME }}" \
+            --password-stdin
+
+
+      # -------------------------------------------------------
+      # 9. Push Docker image
+      # -------------------------------------------------------
+      - name: Push Docker image
+        run: |
+          docker push "$IMAGE_NAME"
+
+
+      # -------------------------------------------------------
+      # 10. Start Minikube
+      # -------------------------------------------------------
+      - name: Start Minikube
+        run: |
+          minikube status || minikube start --driver=docker
+
+
+      # -------------------------------------------------------
+      # 11. Create Kubernetes image pull secret
+      # -------------------------------------------------------
+      - name: Create image pull secret
+        run: |
+          kubectl create secret docker-registry artifactory-secret \
+            --docker-server="${{ secrets.REGISTRY }}" \
+            --docker-username="${{ secrets.REGISTRY_USERNAME }}" \
+            --docker-password="${{ secrets.REGISTRY_PASSWORD }}" \
+            --dry-run=client \
+            -o yaml | kubectl apply -f -
+
+
+      # -------------------------------------------------------
+      # 12. Deploy application using Helm
+      # -------------------------------------------------------
+      - name: Deploy with Helm
+        run: |
+          helm upgrade --install hello-java ./helm/hello-java \
+            --set image.repository="${{ secrets.REGISTRY }}/hello-docker/hello-java" \
+            --set image.tag="${GITHUB_SHA}"
+
+
+      # -------------------------------------------------------
+      # 13. Validate Kubernetes deployment
+      # -------------------------------------------------------
+      - name: Validate deployment
+        run: |
+          kubectl get pods
+          kubectl get services
+
+          kubectl rollout status deployment/hello-java --timeout=120s
+
+
+      # -------------------------------------------------------
+      # 14. Display application information
+      # -------------------------------------------------------
+      - name: Display application URL
+        run: |
+          minikube service hello-java --url
