@@ -62,7 +62,7 @@ jobs:
       # -------------------------------------------------------
       - name: Set image name
         run: |
-          echo "IMAGE_NAME=${{ secrets.REGISTRY }}/hello-docker/hello-java:${GITHUB_SHA}" >> "$GITHUB_ENV"
+          echo "IMAGE_NAME=localhost:5000/hello-docker/hello-java:${GITHUB_SHA}" >> "$GITHUB_ENV"
 
 
       # -------------------------------------------------------
@@ -83,15 +83,7 @@ jobs:
           ./scripts/scan-image.sh "$IMAGE_NAME"
 
 
-      # -------------------------------------------------------
-      # 8. Login to Artifactory
-      # -------------------------------------------------------
-      - name: Login to container registry
-        run: |
-          echo "${{ secrets.REGISTRY_PASSWORD }}" | \
-          docker login "${{ secrets.REGISTRY }}" \
-            --username "${{ secrets.REGISTRY_USERNAME }}" \
-            --password-stdin
+
 
 
       # -------------------------------------------------------
