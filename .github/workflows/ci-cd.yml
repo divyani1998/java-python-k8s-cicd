@@ -71,6 +71,9 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
+      - name: Verify Docker Hub login
+        run: |
+          docker info | grep -i username || true
 
       # -------------------------------------------------------
       # 6. Build Docker image
