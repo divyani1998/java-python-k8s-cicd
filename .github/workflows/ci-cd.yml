@@ -135,7 +135,7 @@ jobs:
 
 build-scan-deploy:
 
-```
+
 # Self-hosted Linux runner with Docker, Minikube, kubectl and Helm installed.
 runs-on: self-hosted
 
@@ -363,4 +363,4 @@ steps:
       echo "======================================================"
       echo "       CI/CD PIPELINE COMPLETED SUCCESSFULLY"
       echo "======================================================"
-```
+
