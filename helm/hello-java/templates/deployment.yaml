@@ -1,0 +1,48 @@
+apiVersion: apps/v1
+kind: Deployment
+
+metadata:
+  name: hello-java
+
+spec:
+  replicas: {{ .Values.replicaCount }}
+
+  selector:
+    matchLabels:
+      app: hello-java
+
+  template:
+
+    metadata:
+      labels:
+        app: hello-java
+
+    spec:
+
+      imagePullSecrets:
+        {{- toYaml .Values.imagePullSecrets | nindent 8 }}
+
+      containers:
+
+        - name: hello-java
+
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+
+          ports:
+            - containerPort: {{ .Values.container.port }}
+
+          readinessProbe:
+            httpGet:
+              path: /
+              port: {{ .Values.container.port }}
+            initialDelaySeconds: 5
+            periodSeconds: 5
+
+          livenessProbe:
+            httpGet:
+              path: /
+              port: {{ .Values.container.port }}
+            initialDelaySeconds: 15
+            periodSeconds: 10
