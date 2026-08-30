@@ -1,4 +1,6 @@
-# Java CI/CD to Kubernetes — DevSecOps Pipeline
+# =============================================================================
+
+# Java CI/CD to Kubernetes - DevSecOps Pipeline
 
 #
 
@@ -8,55 +10,75 @@
 
 # Developer Push
 
-# ↓
+# |
+
+# v
 
 # GitHub Actions
 
-# ↓
+# |
 
-# Source Checkout — GitHub
+# v
 
-# ↓
+# Source Checkout
 
-# Java 17 Setup
+# |
 
-# ↓
+# v
 
-# Maven Build & Unit Tests
+# Java 17 + Maven Build & Tests
 
-# ↓
+# |
 
-# SonarQube — Static Code Quality Analysis
+# v
 
-# ↓
+# SonarQube - Code Quality Analysis
+
+# |
+
+# v
 
 # Docker Image Build
 
-# ↓
+# |
 
-# Trivy — Container Vulnerability & Secret Scanning
+# v
 
-# ↓
+# Trivy - Container Security Scan
 
-# Docker Hub — Container Image Registry
+# |
 
-# ↓
+# v
 
-# Minikube — Local Kubernetes Cluster
+# Docker Hub - Image Registry
 
-# ↓
+# |
 
-# Kubernetes Image Pull Secret
+# v
 
-# ↓
+# Minikube - Kubernetes Cluster
 
-# Helm — Kubernetes Deployment
+# |
 
-# ↓
+# v
+
+# Kubernetes Docker Registry Secret
+
+# |
+
+# v
+
+# Helm Deployment
+
+# |
+
+# v
 
 # Kubernetes Rollout Validation
 
-# ↓
+# |
+
+# v
 
 # Deployment Information
 
@@ -72,79 +94,65 @@
 
 # Security:
 
-# - SonarQube performs source-code quality analysis.
+# - SonarQube performs static code quality analysis.
 
-# - Trivy scans the built container image for vulnerabilities and secrets.
+# - Trivy scans the Docker image for vulnerabilities and secrets.
 
-# - Docker Hub credentials are stored securely in GitHub Secrets.
+# - Docker Hub credentials are stored in GitHub Secrets.
 
-# - Kubernetes uses an imagePullSecret to authenticate with Docker Hub.
-
-#
-
-# Deployment:
-
-# - Docker image is tagged using the Git commit SHA.
-
-# - The image is pushed to Docker Hub.
-
-# - Helm deploys the exact image version to Kubernetes.
-
-# - Kubernetes rollout status is validated before the pipeline completes.
+# - Kubernetes uses an imagePullSecret for private registry authentication.
 
 #
 
-# Demo Policy:
+# Demo:
 
-# Trivy findings are reported for demonstration purposes. The scan
+# Trivy findings are reported but do not intentionally block the demo pipeline.
 
-# script is configured to report vulnerabilities without intentionally
-
-# blocking this demo pipeline.
+# =============================================================================
 
 name: Java CI/CD to Kubernetes - DevSecOps
 
-# ---------------------------------------------------------------------------
+# =============================================================================
 
-# PIPELINE TRIGGER
+# PIPELINE TRIGGERS
 
-# ---------------------------------------------------------------------------
+# =============================================================================
 
 on:
 push:
 branches:
 - divyani1998-patch-1
 
-# Allows the pipeline to be started manually from GitHub Actions.
-
 workflow_dispatch:
 
-# ===========================================================================
+# =============================================================================
 
 # CI/CD JOB
 
-# ===========================================================================
+# =============================================================================
 
 jobs:
 
 build-scan-deploy:
 
-
-# Self-hosted Ubuntu runner hosting Docker, Minikube, kubectl and Helm.
+```
+# Self-hosted Linux runner with Docker, Minikube, kubectl and Helm installed.
 runs-on: self-hosted
 
 steps:
 
-  # =====================================================================
+  # -----------------------------------------------------------------------
   # 1. CHECKOUT SOURCE CODE
-  # =====================================================================
+  # -----------------------------------------------------------------------
+
   - name: Checkout source code
     uses: actions/checkout@v4
 
 
-  # =====================================================================
-  # 2. CONFIGURE JAVA
-  # =====================================================================
+  # -----------------------------------------------------------------------
+  # 2. CONFIGURE JAVA 17
+  # -----------------------------------------------------------------------
+
   - name: Set up Java 17
     uses: actions/setup-java@v4
     with:
@@ -152,26 +160,27 @@ steps:
       java-version: '17'
 
 
-  # =====================================================================
-  # 3. BUILD AND TEST
-  # =====================================================================
-  - name: Build and test Java application
-    run: |
-      echo "Starting Maven build and test execution..."
-      mvn clean package
+  # -----------------------------------------------------------------------
+  # 3. BUILD AND TEST JAVA APPLICATION
+  # -----------------------------------------------------------------------
 
+  - name: Build and test application
+    run: |
+      echo "Starting Maven build and tests..."
+      mvn clean package
       echo "Maven build completed successfully."
 
 
-  # =====================================================================
+  # -----------------------------------------------------------------------
   # 4. SONARQUBE CODE QUALITY ANALYSIS
-  # =====================================================================
+  # -----------------------------------------------------------------------
+
   - name: Run SonarQube analysis
     env:
       SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
       SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
     run: |
-      echo "Starting SonarQube static code analysis..."
+      echo "Starting SonarQube analysis..."
 
       mvn -B org.sonarsource.scanner.maven:sonar-maven-plugin:sonar \
         -Dsonar.host.url="$SONAR_HOST_URL" \
@@ -181,9 +190,10 @@ steps:
       echo "SonarQube analysis completed."
 
 
-  # =====================================================================
+  # -----------------------------------------------------------------------
   # 5. DEFINE DOCKER IMAGE
-  # =====================================================================
+  # -----------------------------------------------------------------------
+
   - name: Define Docker image
     run: |
       IMAGE_NAME="${{ secrets.DOCKERHUB_USERNAME }}/hello-java:${GITHUB_SHA}"
@@ -194,9 +204,10 @@ steps:
       echo "$IMAGE_NAME"
 
 
-  # =====================================================================
-  # 6. AUTHENTICATE WITH DOCKER HUB
-  # =====================================================================
+  # -----------------------------------------------------------------------
+  # 6. LOGIN TO DOCKER HUB
+  # -----------------------------------------------------------------------
+
   - name: Login to Docker Hub
     uses: docker/login-action@v3
     with:
@@ -204,9 +215,10 @@ steps:
       password: ${{ secrets.DOCKERHUB_TOKEN }}
 
 
-  # =====================================================================
+  # -----------------------------------------------------------------------
   # 7. BUILD DOCKER IMAGE
-  # =====================================================================
+  # -----------------------------------------------------------------------
+
   - name: Build Docker image
     run: |
       echo "Building Docker image..."
@@ -216,39 +228,40 @@ steps:
 
       echo "Docker image built successfully."
 
-      docker images | grep hello-java || true
 
+  # -----------------------------------------------------------------------
+  # 8. TRIVY CONTAINER SECURITY SCAN
+  # -----------------------------------------------------------------------
 
-  # =====================================================================
-  # 8. CONTAINER SECURITY SCANNING
-  # =====================================================================
   - name: Scan Docker image with Trivy
     run: |
-      echo "Starting Trivy container security scan..."
+      echo "Starting Trivy security scan..."
 
       chmod +x scripts/scan-image.sh
 
       ./scripts/scan-image.sh "$IMAGE_NAME"
 
-      echo "Trivy security scanning completed."
+      echo "Trivy security scan completed."
 
 
-  # =====================================================================
-  # 9. PUSH IMAGE TO DOCKER HUB
-  # =====================================================================
+  # -----------------------------------------------------------------------
+  # 9. PUSH DOCKER IMAGE TO DOCKER HUB
+  # -----------------------------------------------------------------------
+
   - name: Push Docker image to Docker Hub
     run: |
       echo "Pushing Docker image to Docker Hub..."
 
       docker push "$IMAGE_NAME"
 
-      echo "Docker image pushed successfully:"
+      echo "Docker image pushed successfully."
       echo "$IMAGE_NAME"
 
 
-  # =====================================================================
+  # -----------------------------------------------------------------------
   # 10. START / VERIFY MINIKUBE
-  # =====================================================================
+  # -----------------------------------------------------------------------
+
   - name: Start Minikube Kubernetes cluster
     run: |
       echo "Checking Minikube status..."
@@ -260,12 +273,13 @@ steps:
       kubectl get nodes
 
 
-  # =====================================================================
+  # -----------------------------------------------------------------------
   # 11. CREATE DOCKER HUB IMAGE PULL SECRET
-  # =====================================================================
+  # -----------------------------------------------------------------------
+
   - name: Create Kubernetes Docker Hub pull secret
     run: |
-      echo "Creating/updating Docker Hub image pull secret..."
+      echo "Creating Docker Hub image pull secret..."
 
       kubectl create secret docker-registry dockerhub-secret \
         --docker-server=https://index.docker.io/v1/ \
@@ -277,32 +291,34 @@ steps:
       echo "Docker Hub pull secret is ready."
 
 
-  # =====================================================================
+  # -----------------------------------------------------------------------
   # 12. DEPLOY APPLICATION USING HELM
-  # =====================================================================
+  # -----------------------------------------------------------------------
+
   - name: Deploy application with Helm
     run: |
-      echo "Deploying hello-java application using Helm..."
+      echo "Deploying hello-java using Helm..."
 
       helm upgrade --install hello-java ./helm/hello-java \
         --set image.repository="${{ secrets.DOCKERHUB_USERNAME }}/hello-java" \
         --set image.tag="${GITHUB_SHA}"
 
-      echo "Helm deployment completed."
+      echo "Helm deployment completed successfully."
 
 
-  # =====================================================================
+  # -----------------------------------------------------------------------
   # 13. VALIDATE KUBERNETES DEPLOYMENT
-  # =====================================================================
+  # -----------------------------------------------------------------------
+
   - name: Validate Kubernetes deployment
     run: |
-      echo "Checking Kubernetes pods..."
+      echo "Kubernetes Pods:"
       kubectl get pods
 
-      echo "Checking Kubernetes services..."
+      echo "Kubernetes Services:"
       kubectl get services
 
-      echo "Waiting for application rollout..."
+      echo "Waiting for deployment rollout..."
 
       kubectl rollout status \
         deployment/hello-java \
@@ -311,9 +327,10 @@ steps:
       echo "Kubernetes deployment successfully rolled out."
 
 
-  # =====================================================================
+  # -----------------------------------------------------------------------
   # 14. DISPLAY DEPLOYMENT INFORMATION
-  # =====================================================================
+  # -----------------------------------------------------------------------
+
   - name: Display application information
     run: |
       echo "======================================================"
@@ -346,4 +363,4 @@ steps:
       echo "======================================================"
       echo "       CI/CD PIPELINE COMPLETED SUCCESSFULLY"
       echo "======================================================"
-
+```
