@@ -1,0 +1,19 @@
+# Default application configuration.
+
+replicaCount: 1
+
+image:
+  repository: REPLACE_WITH_REGISTRY/hello-docker/hello-java
+  tag: "latest"
+  pullPolicy: IfNotPresent
+
+imagePullSecrets:
+  - name: artifactory-secret
+
+service:
+  type: NodePort
+  port: 8080
+  nodePort: 30080
+
+container:
+  port: 8080
