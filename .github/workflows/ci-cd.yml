@@ -151,4 +151,11 @@ jobs:
       # -------------------------------------------------------
       - name: Display application URL
         run: |
-          minikube service hello-java --url
+          echo "Kubernetes service:"
+          kubectl get service hello-java
+      
+          echo "Application deployed successfully."
+          minikube ip
+      
+          echo "Service port:"
+          kubectl get service hello-java -o jsonpath='{.spec.ports[0].nodePort}'
