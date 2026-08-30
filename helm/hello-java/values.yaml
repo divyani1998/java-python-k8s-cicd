@@ -3,12 +3,12 @@
 replicaCount: 1
 
 image:
-  repository: REPLACE_WITH_REGISTRY/hello-docker/hello-java
+  repository: sahud12/hello-java
   tag: "latest"
   pullPolicy: IfNotPresent
 
 imagePullSecrets:
-  - name: artifactory-secret
+  - name: dockerhub-secret
 
 service:
   type: NodePort
