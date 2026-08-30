@@ -129,7 +129,7 @@ jobs:
 
 build-scan-deploy:
 
-```
+
 # Self-hosted Ubuntu runner hosting Docker, Minikube, kubectl and Helm.
 runs-on: self-hosted
 
