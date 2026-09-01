@@ -1,0 +1,201 @@
+
+---
+
+# 4. `.github/workflows/ansible-vm-deployment.yml`
+
+This is the GitHub Actions workflow.
+
+**This is the important file because it connects everything together.**
+
+```yaml
+name: Java CI/CD - Ansible VM Deployment
+
+on:
+
+  push:
+    branches:
+      - ansible-vm-deployment
+
+  workflow_dispatch:
+
+
+jobs:
+
+  build-and-deploy:
+
+    name: Build, Analyze and Deploy
+
+    runs-on: ubuntu-latest
+
+    steps:
+
+      # -------------------------------------------------------
+      # 1. Checkout source code
+      # -------------------------------------------------------
+      - name: Checkout source code
+        uses: actions/checkout@v4
+
+
+      # -------------------------------------------------------
+      # 2. Setup Java 17
+      # -------------------------------------------------------
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: maven
+
+
+      # -------------------------------------------------------
+      # 3. Build and test Java application
+      # -------------------------------------------------------
+      - name: Build and test application
+        run: |
+          mvn clean package
+
+
+      # -------------------------------------------------------
+      # 4. SonarQube code quality analysis
+      # -------------------------------------------------------
+      - name: SonarQube analysis
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+        run: |
+          mvn -B org.sonarsource.scanner.maven:sonar-maven-plugin:sonar \
+            -Dsonar.host.url="$SONAR_HOST_URL" \
+            -Dsonar.token="$SONAR_TOKEN" \
+            -Dsonar.projectKey=java-python-k8s-cicd
+
+
+      # -------------------------------------------------------
+      # 5. Identify generated JAR
+      # -------------------------------------------------------
+      - name: Identify application JAR
+        run: |
+
+          JAR_FILE=$(find target \
+            -maxdepth 1 \
+            -type f \
+            -name "*.jar" \
+            ! -name "*original*" \
+            | head -n 1)
+
+          if [ -z "$JAR_FILE" ]; then
+            echo "ERROR: Application JAR was not found."
+            exit 1
+          fi
+
+          echo "JAR_FILE=$JAR_FILE" >> "$GITHUB_ENV"
+
+          echo "Application JAR:"
+          echo "$JAR_FILE"
+
+
+      # -------------------------------------------------------
+      # 6. Install Ansible
+      # -------------------------------------------------------
+      - name: Install Ansible
+        run: |
+
+          sudo apt-get update
+
+          sudo apt-get install -y ansible
+
+
+      # -------------------------------------------------------
+      # 7. Verify Ansible installation
+      # -------------------------------------------------------
+      - name: Verify Ansible
+        run: |
+
+          ansible --version
+
+
+      # -------------------------------------------------------
+      # 8. Configure SSH
+      # -------------------------------------------------------
+      - name: Configure SSH
+        env:
+          VM_SSH_PRIVATE_KEY: ${{ secrets.VM_SSH_PRIVATE_KEY }}
+        run: |
+
+          mkdir -p ~/.ssh
+
+          echo "$VM_SSH_PRIVATE_KEY" > ~/.ssh/id_rsa
+
+          chmod 600 ~/.ssh/id_rsa
+
+          ssh-keyscan -H "${{ secrets.VM_HOST }}" \
+            >> ~/.ssh/known_hosts
+
+
+      # -------------------------------------------------------
+      # 9. Test VM connectivity
+      # -------------------------------------------------------
+      - name: Test Ansible connectivity
+        env:
+          VM_HOST: ${{ secrets.VM_HOST }}
+          VM_USER: ${{ secrets.VM_USER }}
+        run: |
+
+          ansible-playbook \
+            -i ansible/inventory/hosts.yml \
+            ansible/deploy.yml \
+            --syntax-check
+
+          ansible \
+            -i ansible/inventory/hosts.yml \
+            java_servers \
+            -m ping
+
+
+      # -------------------------------------------------------
+      # 10. Deploy JAR using Ansible
+      # -------------------------------------------------------
+      - name: Deploy application using Ansible
+        env:
+          JAR_FILE: ${{ github.workspace }}/${{ env.JAR_FILE }}
+          VM_HOST: ${{ secrets.VM_HOST }}
+          VM_USER: ${{ secrets.VM_USER }}
+        run: |
+
+          ansible-playbook \
+            -i ansible/inventory/hosts.yml \
+            ansible/deploy.yml
+
+
+      # -------------------------------------------------------
+      # 11. Validate application
+      # -------------------------------------------------------
+      - name: Validate deployment
+        env:
+          VM_HOST: ${{ secrets.VM_HOST }}
+          VM_USER: ${{ secrets.VM_USER }}
+        run: |
+
+          ssh \
+            -i ~/.ssh/id_rsa \
+            "${VM_USER}@${VM_HOST}" \
+            "systemctl is-active --quiet hello-java"
+
+          echo "Java application is running successfully."
+
+
+      # -------------------------------------------------------
+      # 12. Deployment summary
+      # -------------------------------------------------------
+      - name: Deployment summary
+        run: |
+
+          echo "=========================================="
+          echo " Java CI/CD Deployment Completed"
+          echo "=========================================="
+          echo "Build       : Maven"
+          echo "Code Quality: SonarQube"
+          echo "Automation  : Ansible"
+          echo "Target      : Linux VM"
+          echo "Runtime     : Java 17"
+          echo "Service     : systemd"
+          echo "=========================================="
