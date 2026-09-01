@@ -50,19 +50,42 @@ jobs:
         run: |
           mvn clean package
 
+      # -------------------------------------------------------
+      # Start temporary SonarQube server
+      # -------------------------------------------------------
+      - name: Start SonarQube
+        run: |
+          docker run -d \
+            --name sonarqube \
+            -p 9000:9000 \
+            sonarqube:lts-community
+
+          echo "Waiting for SonarQube to start..."
+
+          for i in {1..60}; do
+            if curl -s http://localhost:9000/api/system/status | grep -q '"status":"UP"'; then
+              echo "SonarQube is ready."
+              break
+            fi
+
+            echo "SonarQube is not ready yet..."
+            sleep 5
+          done
+
+          curl -f http://localhost:9000/api/system/status
+
 
       # -------------------------------------------------------
-      # 4. SonarQube code quality analysis
+      # SonarQube code quality analysis
       # -------------------------------------------------------
       - name: SonarQube analysis
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
         run: |
-          mvn -B org.sonarsource.scanner.maven:sonar-maven-plugin:sonar \
-            -Dsonar.host.url="$SONAR_HOST_URL" \
+          mvn -B org.sonarsource.scanner.maven:sonar-maven-plugin:5.7.0.6970:sonar \
+            -Dsonar.host.url=http://localhost:9000 \
             -Dsonar.token="$SONAR_TOKEN" \
-            -Dsonar.projectKey=java-python-k8s-cicd
+            -Dsonar.projectKey=hello-java
 
 
       # -------------------------------------------------------
