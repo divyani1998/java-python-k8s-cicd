@@ -1,0 +1,5 @@
+app_name: hello-java
+app_user: javaapp
+app_directory: /opt/hello-java
+app_jar: hello-java.jar
+app_port: 8080
