@@ -1,6 +1,6 @@
 ---
-- name: Deploy Java application to Linux VM
-  hosts: java_servers
+- name: Deploy Java application to GitHub-hosted runner
+  hosts: java_vm
   become: true
 
   vars_files:
