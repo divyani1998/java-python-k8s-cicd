@@ -156,7 +156,7 @@ jobs:
         run: |
           ansible \
             -i ansible/inventory/hosts.yml \
-            java_servers \
+            java_vm \
             -m ping
 
 
