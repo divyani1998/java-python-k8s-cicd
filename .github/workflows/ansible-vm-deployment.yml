@@ -126,9 +126,7 @@ jobs:
       # -------------------------------------------------------
       - name: Install Ansible
         run: |
-
           sudo apt-get update
-
           sudo apt-get install -y ansible
 
 
@@ -137,42 +135,25 @@ jobs:
       # -------------------------------------------------------
       - name: Verify Ansible
         run: |
-
           ansible --version
 
 
       # -------------------------------------------------------
-      # 8. Configure SSH
+      # 8. Validate Ansible configuration
       # -------------------------------------------------------
-      - name: Configure SSH
-        env:
-          VM_SSH_PRIVATE_KEY: ${{ secrets.VM_SSH_PRIVATE_KEY }}
+      - name: Validate Ansible playbook
         run: |
-
-          mkdir -p ~/.ssh
-
-          echo "$VM_SSH_PRIVATE_KEY" > ~/.ssh/id_rsa
-
-          chmod 600 ~/.ssh/id_rsa
-
-          ssh-keyscan -H "${{ secrets.VM_HOST }}" \
-            >> ~/.ssh/known_hosts
-
-
-      # -------------------------------------------------------
-      # 9. Test VM connectivity
-      # -------------------------------------------------------
-      - name: Test Ansible connectivity
-        env:
-          VM_HOST: ${{ secrets.VM_HOST }}
-          VM_USER: ${{ secrets.VM_USER }}
-        run: |
-
           ansible-playbook \
             -i ansible/inventory/hosts.yml \
             ansible/deploy.yml \
             --syntax-check
 
+
+      # -------------------------------------------------------
+      # 9. Verify local Ansible connectivity
+      # -------------------------------------------------------
+      - name: Test Ansible local connectivity
+        run: |
           ansible \
             -i ansible/inventory/hosts.yml \
             java_servers \
@@ -185,30 +166,24 @@ jobs:
       - name: Deploy application using Ansible
         env:
           JAR_FILE: ${{ github.workspace }}/${{ env.JAR_FILE }}
-          VM_HOST: ${{ secrets.VM_HOST }}
-          VM_USER: ${{ secrets.VM_USER }}
         run: |
-
           ansible-playbook \
             -i ansible/inventory/hosts.yml \
-            ansible/deploy.yml
+            ansible/deploy.yml \
+            -e "jar_file=$JAR_FILE"
 
 
       # -------------------------------------------------------
-      # 11. Validate application
+      # 11. Validate application deployment
       # -------------------------------------------------------
       - name: Validate deployment
-        env:
-          VM_HOST: ${{ secrets.VM_HOST }}
-          VM_USER: ${{ secrets.VM_USER }}
         run: |
-
-          ssh \
-            -i ~/.ssh/id_rsa \
-            "${VM_USER}@${VM_HOST}" \
-            "systemctl is-active --quiet hello-java"
+          systemctl is-active --quiet hello-java
 
           echo "Java application is running successfully."
+
+          echo "Application service status:"
+          systemctl status hello-java --no-pager
 
 
       # -------------------------------------------------------
@@ -216,14 +191,15 @@ jobs:
       # -------------------------------------------------------
       - name: Deployment summary
         run: |
-
           echo "=========================================="
           echo " Java CI/CD Deployment Completed"
           echo "=========================================="
-          echo "Build       : Maven"
-          echo "Code Quality: SonarQube"
-          echo "Automation  : Ansible"
-          echo "Target      : Linux VM"
-          echo "Runtime     : Java 17"
-          echo "Service     : systemd"
+          echo "Build        : Maven"
+          echo "Code Quality : SonarQube"
+          echo "Automation   : Ansible"
+          echo "Target       : GitHub-hosted Ubuntu Runner"
+          echo "Connection   : Local"
+          echo "Runtime      : Java 17"
+          echo "Deployment   : JAR"
+          echo "Service      : systemd"
           echo "=========================================="
