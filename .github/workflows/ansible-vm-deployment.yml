@@ -1,13 +1,9 @@
 
 ---
 
-# 4. `.github/workflows/ansible-vm-deployment.yml`
+# 4. `.github/workflows/ansible-vm-deployment.yml
 
-This is the GitHub Actions workflow.
 
-**This is the important file because it connects everything together.**
-
-```yaml
 name: Java CI/CD - Ansible VM Deployment
 
 on:
