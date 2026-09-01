@@ -1,8 +1,4 @@
 
----
-
-# 4. `.github/workflows/ansible-vm-deployment.yml
-
 
 name: Java CI/CD - Ansible VM Deployment
 
@@ -51,10 +47,12 @@ jobs:
           mvn clean package
 
       # -------------------------------------------------------
-      # Start temporary SonarQube server
+      # 4. Start temporary SonarQube
       # -------------------------------------------------------
       - name: Start SonarQube
         run: |
+          docker rm -f sonarqube 2>/dev/null || true
+
           docker run -d \
             --name sonarqube \
             -p 9000:9000 \
@@ -62,30 +60,41 @@ jobs:
 
           echo "Waiting for SonarQube to start..."
 
-          for i in {1..60}; do
-            if curl -s http://localhost:9000/api/system/status | grep -q '"status":"UP"'; then
+          for i in {1..30}; do
+            STATUS=$(curl -s http://localhost:9000/api/system/status | grep -o '"status":"[^"]*"' || true)
+
+            if echo "$STATUS" | grep -q '"status":"UP"'; then
               echo "SonarQube is ready."
               break
             fi
 
             echo "SonarQube is not ready yet..."
-            sleep 5
+            sleep 10
           done
 
-          curl -f http://localhost:9000/api/system/status
+
+      # -------------------------------------------------------
+      # 5. Create temporary SonarQube token
+      # -------------------------------------------------------
+      - name: Create SonarQube token
+        run: |
+          SONAR_TOKEN=$(curl -s -u admin:admin \
+            -X POST \
+            "http://localhost:9000/api/user_tokens/generate?name=github-actions-${GITHUB_RUN_ID}" \
+            | python3 -c "import sys,json; print(json.load(sys.stdin)['token'])")
+
+          echo "SONAR_TOKEN=$SONAR_TOKEN" >> "$GITHUB_ENV"
 
 
       # -------------------------------------------------------
-      # SonarQube code quality analysis
+      # 6. SonarQube code quality analysis
       # -------------------------------------------------------
       - name: SonarQube analysis
-        env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         run: |
           mvn -B org.sonarsource.scanner.maven:sonar-maven-plugin:5.7.0.6970:sonar \
             -Dsonar.host.url=http://localhost:9000 \
             -Dsonar.token="$SONAR_TOKEN" \
-            -Dsonar.projectKey=hello-java
+            -Dsonar.projectKey=java-python-k8s-cicd
 
 
       # -------------------------------------------------------
