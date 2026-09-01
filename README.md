@@ -1,383 +1,604 @@
-## CI/CD Pipeline Implementation & Design Decisions
+# Java CI/CD with Maven, SonarQube and Ansible VM Deployment
 
-### Overview
+## 📌 Project Overview
 
-This project demonstrates an end-to-end **CI/CD pipeline for a Java application**, integrating code quality, containerization, security scanning, container image publishing, and Kubernetes deployment.
+This project demonstrates an end-to-end **Java CI/CD pipeline using GitHub Actions**, where a Java application is built with Maven, analyzed with SonarQube, and deployed as a JAR using **Ansible**.
 
-The pipeline is implemented using **GitHub Actions** and runs on a **self-hosted Ubuntu runner**.
+For this demo, we are intentionally using a **GitHub-hosted Ubuntu runner as the deployment target** instead of maintaining a separate Linux VM.
 
-### Tools & Technologies Used
+This allows us to demonstrate Ansible-based VM deployment without requiring additional cloud infrastructure.
 
-The pipeline uses the following tools:
-
-* **GitHub** – Source code management and version control
-* **GitHub Actions** – CI/CD pipeline automation
-* **Self-hosted Ubuntu Runner** – Executes the CI/CD jobs
-* **Java 17 / Maven** – Application build and packaging
-* **SonarQube** – Static code quality analysis
-* **Docker** – Application containerization
-* **Docker Hub** – Container image registry
-* **Trivy** – Container vulnerability and secret scanning
-* **Minikube** – Local Kubernetes environment for deployment demonstration
-* **Kubernetes** – Container orchestration
-* **Helm** – Kubernetes application deployment and release management
+> **Note:** Using the GitHub-hosted runner itself as the deployment target is intended for demonstration and learning purposes. In a production environment, Ansible would normally connect from the CI runner/control node to a persistent Linux VM or server.
 
 ---
 
-## CI/CD Pipeline Flow
-
-The overall pipeline follows this flow:
+# 🔄 CI/CD Flow
 
 ```text
 Developer
-    |
-    v
+    │
+    │ Push code
+    ▼
 GitHub Repository
-    |
-    v
+    │
+    ▼
 GitHub Actions
-    |
-    v
-Self-Hosted Ubuntu Runner
-    |
-    +----> Checkout Source Code
-    |
-    +----> Java 17 + Maven Build & Test
-    |
-    +----> SonarQube Code Quality Analysis
-    |
-    +----> Docker Image Build
-    |
-    +----> Trivy Security Scan
-    |
-    +----> Push Docker Image to Docker Hub
-    |
-    +----> Start / Verify Minikube
-    |
-    +----> Create Kubernetes Image Pull Secret
-    |
-    +----> Helm Deployment
-    |
-    +----> Kubernetes Deployment Validation
-    |
-    v
-Application Running on Kubernetes
+    │
+    ├── 1. Checkout Java source code
+    │
+    ├── 2. Setup Java 17
+    │
+    ├── 3. Maven Build & Unit Tests
+    │
+    ├── 4. SonarQube Code Quality Analysis
+    │
+    ├── 5. Install / Verify Ansible
+    │
+    ├── 6. Configure Ansible
+    │
+    ├── 7. Ansible Connectivity Test
+    │
+    ├── 8. Deploy JAR using Ansible
+    │
+    ├── 9. Configure systemd service
+    │
+    └── 10. Validate Application
+    │
+    ▼
+Java Application Running
+on GitHub-hosted Ubuntu Runner
 ```
 
 ---
 
-## Why Docker Hub Instead of Artifactory?
-
-For this project, **Docker Hub is used as the container image registry instead of JFrog Artifactory**.
-
-### Reason
-
-This project is primarily a **CI/CD demonstration**, and Docker Hub provides a simple and lightweight way to demonstrate the complete container lifecycle:
+# 🏗️ Architecture
 
 ```text
-Build → Scan → Push → Pull → Deploy
+                   GitHub Repository
+                          │
+                          │ Push / Manual Trigger
+                          ▼
+                 GitHub Actions Workflow
+                          │
+                          ▼
+                GitHub-hosted Ubuntu Runner
+                          │
+          ┌───────────────┼────────────────┐
+          │               │                │
+          ▼               ▼                ▼
+       Maven          SonarQube          Ansible
+     Build/Test      Code Analysis      Deployment
+          │                                │
+          │                                ▼
+          │                         Local Target
+          │                         java_vm
+          │                                │
+          │                                ▼
+          │                         Copy JAR File
+          │                                │
+          │                                ▼
+          │                         systemd Service
+          │                                │
+          └────────────────────────────────┘
+                                           │
+                                           ▼
+                                   Java Application
 ```
-
-Using Docker Hub avoids introducing additional Artifactory infrastructure and configuration requirements for this demo.
-
-In an enterprise environment, the same pipeline can be adapted to use:
-
-* JFrog Artifactory
-* Amazon ECR
-* Azure Container Registry
-* GitHub Container Registry
-* Other enterprise container registries
-
-The pipeline design remains essentially the same; only the authentication and image registry configuration changes.
 
 ---
 
-## Docker Image Versioning
+# 🛠️ Technologies Used
 
-Docker images are tagged using the **Git commit SHA**:
+| Technology                  | Purpose                                   |
+| --------------------------- | ----------------------------------------- |
+| GitHub                      | Source code management                    |
+| GitHub Actions              | CI/CD automation                          |
+| GitHub-hosted Ubuntu Runner | CI environment and demo deployment target |
+| Java 17                     | Application runtime                       |
+| Maven                       | Build and test automation                 |
+| SonarQube                   | Static code quality analysis              |
+| Ansible                     | Application deployment automation         |
+| systemd                     | Java application service management       |
+| YAML                        | GitHub Actions and Ansible configuration  |
+
+---
+
+# 📁 Project Structure
 
 ```text
-<dockerhub-username>/hello-java:<GITHUB_SHA>
+java-python-k8s-cicd/
+│
+├── .github/
+│   └── workflows/
+│       └── ansible-vm-deployment.yml
+│
+├── ansible/
+│   ├── inventory/
+│   │   └── hosts.yml
+│   │
+│   ├── templates/
+│   │   └── hello-java.service.j2
+│   │
+│   ├── deploy.yml
+│   └── README.md
+│
+├── src/
+│   └── ...
+│
+├── pom.xml
+│
+└── README.md
 ```
+
+---
+
+# 🚀 CI/CD Process
+
+## 1. Source Code Checkout
+
+The workflow starts by checking out the Java application source code from the GitHub repository.
+
+```yaml
+- uses: actions/checkout@v4
+```
+
+This makes the application source available inside the GitHub-hosted Ubuntu runner.
+
+---
+
+## 2. Configure Java
+
+Java 17 is configured using GitHub Actions.
+
+```yaml
+- uses: actions/setup-java@v4
+```
+
+The workflow uses the Eclipse Temurin JDK distribution.
+
+---
+
+## 3. Maven Build and Test
+
+Maven is used to compile the Java application, execute tests, and generate the JAR file.
+
+```bash
+mvn clean package
+```
+
+The resulting artifact is:
+
+```text
+target/hello-java-1.0.0.jar
+```
+
+This JAR becomes the deployment artifact for the Ansible deployment stage.
+
+---
+
+# 🔍 4. SonarQube Analysis
+
+The generated Java project is analyzed using SonarQube.
+
+The workflow starts a temporary SonarQube instance inside the GitHub-hosted runner using Docker.
+
+The SonarQube server is accessed through:
+
+```text
+http://localhost:9000
+```
+
+The workflow passes the SonarQube authentication token through a GitHub Actions secret.
+
+Example:
+
+```text
+SONAR_TOKEN
+SONAR_HOST_URL
+```
+
+Since this is a demonstration project, SonarQube data does not need to persist between workflow executions.
+
+---
+
+# ⚙️ 5. Install Ansible
+
+Ansible is installed directly on the GitHub-hosted Ubuntu runner.
+
+```bash
+sudo apt-get update
+sudo apt-get install -y ansible
+```
+
+The runner therefore acts as the **Ansible control node**.
+
+---
+
+# 🎯 6. GitHub-hosted Runner as Deployment Target
+
+Normally, Ansible follows this architecture:
+
+```text
+Ansible Control Node
+        │
+        │ SSH
+        ▼
+Linux VM
+```
+
+For this demo, we simplify the architecture:
+
+```text
+GitHub-hosted Ubuntu Runner
+          │
+          │ Ansible local connection
+          ▼
+Same GitHub-hosted Ubuntu Runner
+```
+
+The inventory therefore defines the target as a local host:
+
+```yaml
+all:
+  hosts:
+    java_vm:
+      ansible_connection: local
+```
+
+Here:
+
+* `java_vm` is the Ansible inventory hostname.
+* `ansible_connection: local` tells Ansible not to use SSH.
+* Ansible executes the deployment tasks directly on the GitHub-hosted runner.
+
+This eliminates the requirement for a separate VM for this demonstration.
+
+---
+
+# 📋 7. Ansible Inventory
+
+The inventory is located at:
+
+```text
+ansible/inventory/hosts.yml
+```
+
+Example:
+
+```yaml
+all:
+  hosts:
+    java_vm:
+      ansible_connection: local
+```
+
+The name `java_vm` is then used by the Ansible playbook:
+
+```yaml
+hosts: java_vm
+```
+
+The same hostname is also used for the Ansible connectivity test.
+
+---
+
+# 🔗 8. Ansible Connectivity Test
+
+Before deployment, the workflow verifies that Ansible can communicate with the target.
+
+```bash
+ansible \
+  -i ansible/inventory/hosts.yml \
+  java_vm \
+  -m ping
+```
+
+Expected result:
+
+```text
+java_vm | SUCCESS => {
+    "changed": false,
+    "ping": "pong"
+}
+```
+
+This confirms that Ansible is correctly configured and can execute tasks against the local runner.
+
+---
+
+# 📦 9. JAR Deployment Using Ansible
+
+After the Maven build, the JAR file is available in:
+
+```text
+target/hello-java-1.0.0.jar
+```
+
+The Ansible playbook performs the deployment.
+
+Typical deployment tasks include:
+
+1. Create the application directory.
+2. Copy the generated JAR.
+3. Configure the application service.
+4. Create/update the systemd service.
+5. Start or restart the Java application.
+6. Enable the service if required.
+7. Verify the application status.
+
+The deployment is automated through:
+
+```bash
+ansible-playbook \
+  -i ansible/inventory/hosts.yml \
+  ansible/deploy.yml
+```
+
+---
+
+# 🧩 10. systemd Service
+
+Ansible uses a Jinja2 template to create the Java systemd service.
+
+Template:
+
+```text
+ansible/templates/hello-java.service.j2
+```
+
+The resulting service is:
+
+```text
+hello-java.service
+```
+
+This allows the Java application to be managed using standard Linux service commands.
 
 For example:
 
-```text
-sahud12/hello-java:2ba153327fa0e5c0cb7c6022762f063387c27390
+```bash
+systemctl status hello-java
 ```
 
-### Why Git SHA?
-
-Using the commit SHA provides an immutable and traceable image version.
-
-It allows us to identify:
-
-* Which source-code commit produced the image
-* Which image was deployed to Kubernetes
-* Which version needs to be rolled back if required
-
-This is preferable to relying only on tags such as:
-
-```text
-latest
-dev
-test
-```
-
-because those tags can point to different images over time.
-
----
-
-## Docker Hub Authentication
-
-Docker Hub credentials are stored securely as **GitHub Actions Secrets**.
-
-The pipeline uses:
-
-```text
-DOCKERHUB_USERNAME
-DOCKERHUB_TOKEN
-```
-
-The token is used instead of storing the Docker Hub password directly.
-
-The pipeline authenticates using the Docker Login Action before building and pushing the image.
-
----
-
-## Security Scanning with Trivy
-
-After the Docker image is built, **Trivy** scans the image for:
-
-* Operating system vulnerabilities
-* Application/library vulnerabilities
-* Go binary vulnerabilities
-* Java dependencies
-* Python packages
-* Secrets
-
-Example scan result:
-
-```text
-Target                         Vulnerabilities
-------------------------------------------------
-Ubuntu                         0
-Java application               0
-Python packages                0
-Go binary                      8 HIGH
-```
-
-### Demo Pipeline Behavior
-
-For this demonstration, vulnerabilities are **reported but do not block the remaining CI/CD flow**.
-
-This allows the complete pipeline to be demonstrated even when the image contains vulnerabilities.
-
-In a production DevSecOps implementation, the policy can be changed to fail the pipeline based on defined severity thresholds, for example:
-
-```text
-CRITICAL → Fail pipeline
-HIGH     → Fail pipeline
-MEDIUM   → Warning
-LOW      → Informational
-```
-
-This provides flexibility to implement different security gates based on organizational requirements.
-
----
-
-## Kubernetes Deployment
-
-The application is deployed to a local Kubernetes cluster using **Minikube**.
-
-Minikube is used because this project is intended as a demonstration environment and provides a lightweight Kubernetes cluster without requiring a cloud Kubernetes service.
-
-In an enterprise environment, the same Helm deployment approach can be used with:
-
-* Amazon EKS
-* Azure AKS
-* Google GKE
-* OpenShift
-* Other Kubernetes clusters
-
----
-
-## Why Helm?
-
-The application is deployed using **Helm** instead of directly applying individual Kubernetes YAML files.
-
-Helm provides:
-
-* Reusable Kubernetes templates
-* Parameterized configuration
-* Easy image version updates
-* Consistent deployments
-* Environment-specific configuration
-* Simple upgrade and rollback capabilities
-
-The pipeline dynamically passes the Docker image repository and Git commit SHA:
+The service can also be restarted or stopped using:
 
 ```bash
-helm upgrade --install hello-java ./helm/hello-java \
-  --set image.repository="<dockerhub-username>/hello-java" \
-  --set image.tag="${GITHUB_SHA}"
+systemctl restart hello-java
+systemctl stop hello-java
+systemctl start hello-java
 ```
-
-This means the Kubernetes deployment automatically uses the exact Docker image generated by the current pipeline execution.
 
 ---
 
-## Kubernetes Image Pull Secret
+# ✅ 11. Deployment Validation
 
-Because the Docker Hub repository can be private, the pipeline creates a Kubernetes Docker registry secret:
+After Ansible completes the deployment, the workflow validates the service.
 
-```text
-dockerhub-secret
-```
-
-The secret allows Kubernetes to authenticate with Docker Hub and pull the application image.
-
-The credentials are supplied from GitHub Actions Secrets rather than being hard-coded in the repository.
-
----
-
-## Deployment Validation
-
-After Helm deployment, the pipeline validates the Kubernetes deployment using:
+Example:
 
 ```bash
-kubectl get pods
-kubectl get services
-kubectl rollout status deployment/hello-java --timeout=120s
+systemctl is-active --quiet hello-java
 ```
 
-The rollout status ensures that the application deployment successfully reaches the expected running state.
+If the service is running successfully, the CI/CD pipeline completes successfully.
 
 ---
 
-## Self-Hosted GitHub Actions Runner
+# 🔐 GitHub Actions Secrets
 
-The workflow runs on:
+Sensitive values should not be hardcoded in the workflow.
+
+The project uses GitHub Actions Secrets for sensitive configuration such as:
+
+```text
+SONAR_TOKEN
+SONAR_HOST_URL
+```
+
+Secrets are referenced using:
 
 ```yaml
-runs-on: self-hosted
+${{ secrets.SECRET_NAME }}
 ```
 
-A self-hosted Ubuntu machine is used as the GitHub Actions runner.
-
-The runner contains the required tools such as:
-
-* Docker
-* Maven
-* kubectl
-* Helm
-* Minikube
-* Trivy
-* GitHub Actions Runner
-
-### Why Self-Hosted Runner?
-
-A self-hosted runner provides greater control over:
-
-* Installed tools
-* Docker environment
-* Kubernetes/Minikube access
-* Network configuration
-* Custom enterprise requirements
-
-For this demo, it also allows the pipeline to directly interact with the local Docker and Minikube environment.
+This prevents sensitive credentials from being stored directly in the repository.
 
 ---
 
-## End-to-End CI/CD Lifecycle
+# 🔄 Complete Pipeline
 
-The implemented pipeline follows a typical DevSecOps lifecycle:
+The complete pipeline can be summarized as:
 
 ```text
-SOURCE
-  ↓
-GitHub
-  ↓
-BUILD
-  ↓
-Maven
-  ↓
-CODE QUALITY
-  ↓
-SonarQube
-  ↓
-CONTAINERIZE
-  ↓
-Docker
-  ↓
-SECURITY SCAN
-  ↓
-Trivy
-  ↓
-PUBLISH
-  ↓
-Docker Hub
-  ↓
-DEPLOY
-  ↓
-Helm + Kubernetes
-  ↓
-VALIDATE
-  ↓
-Application Running
+1. Developer pushes Java code
+             │
+             ▼
+2. GitHub Actions starts
+             │
+             ▼
+3. Checkout source code
+             │
+             ▼
+4. Configure Java 17
+             │
+             ▼
+5. Maven clean package
+             │
+             ├── Compile
+             ├── Unit Tests
+             └── Generate JAR
+             │
+             ▼
+6. Start temporary SonarQube
+             │
+             ▼
+7. SonarQube analysis
+             │
+             ▼
+8. Install / verify Ansible
+             │
+             ▼
+9. Ansible ping
+             │
+             ▼
+10. Ansible deployment
+             │
+             ├── Create application directory
+             ├── Copy JAR
+             ├── Configure systemd
+             ├── Restart service
+             └── Enable service
+             │
+             ▼
+11. Validate hello-java service
+             │
+             ▼
+12. Deployment successful
 ```
 
 ---
 
-## Key DevSecOps Practices Demonstrated
+# 💡 Why Ansible Is Used
 
-This project demonstrates the following practices:
+Ansible provides a consistent and repeatable way to automate server/application deployment.
 
-* CI/CD automation using GitHub Actions
-* Self-hosted runner implementation
-* Automated Maven build
-* Automated code quality analysis
-* Docker image creation
-* Container vulnerability scanning
-* Secret scanning
-* Secure registry authentication
-* Immutable Docker image tagging
-* Container image publishing
-* Kubernetes deployment automation
-* Helm-based deployments
-* Kubernetes rollout validation
-* Separation of credentials from source code using GitHub Secrets
+Instead of manually executing:
 
----
+```bash
+cp hello-java.jar /opt/hello-java/
+systemctl restart hello-java
+```
 
-## Production Enhancement Opportunities
+the deployment is described as code inside an Ansible playbook.
 
-The current implementation is designed primarily for demonstration purposes. For a production implementation, the following enhancements could be added:
+This provides:
 
-* Use an enterprise registry such as **JFrog Artifactory or Amazon ECR**
-* Configure Trivy as a blocking security gate for Critical/High vulnerabilities
-* Add SAST, SCA and DAST stages
-* Add SBOM generation
-* Implement image signing and verification
-* Add Kubernetes security scanning
-* Deploy to managed Kubernetes such as EKS/AKS/GKE
-* Implement environment promotion: Dev → QA → UAT → Production
-* Add manual approval gates
-* Implement Helm rollback strategy
-* Add Prometheus and Grafana monitoring
-* Add centralized logging
-* Implement GitOps using Argo CD
-* Add deployment notifications
-* Implement automated rollback on failed deployments
+* Repeatable deployments
+* Infrastructure/application automation
+* Reduced manual intervention
+* Configuration as code
+* Easy integration with CI/CD
+* Idempotent deployment operations
 
 ---
 
-## Summary
+# 🆚 Previous Docker/Kubernetes Approach vs Current Ansible Approach
 
-The project demonstrates how a Java application can move from **source code to a running Kubernetes deployment through an automated DevSecOps pipeline**.
+The repository was initially designed around containerized deployment using Docker and Kubernetes.
 
-The primary flow is:
+For this branch, the deployment model was simplified to demonstrate traditional VM/JAR deployment using Ansible.
 
-**GitHub → GitHub Actions → Maven → SonarQube → Docker → Trivy → Docker Hub → Minikube/Kubernetes → Helm → Application**
+### Previous approach
 
-Docker Hub is intentionally used as the registry for this demonstration to keep the setup simple. The architecture can easily be extended to an enterprise registry such as JFrog Artifactory or a cloud container registry without changing the fundamental CI/CD workflow.
+```text
+Java
+ │
+ ▼
+Maven
+ │
+ ▼
+Docker Image
+ │
+ ▼
+Docker Hub
+ │
+ ▼
+Kubernetes
+ │
+ ▼
+Helm
+ │
+ ▼
+Application
+```
+
+### Current Ansible approach
+
+```text
+Java
+ │
+ ▼
+Maven
+ │
+ ▼
+JAR
+ │
+ ▼
+Ansible
+ │
+ ▼
+Linux Environment
+ │
+ ▼
+systemd
+ │
+ ▼
+Java Application
+```
+
+The Docker build, Docker image scan, Docker Hub push, Kubernetes, Minikube and Helm deployment stages are therefore not required for this VM deployment flow.
+
+---
+
+# 🎯 Purpose of This Demo
+
+The primary objective of this branch is to demonstrate:
+
+* Java CI/CD using GitHub Actions
+* Maven-based application build
+* Automated unit testing
+* SonarQube code quality analysis
+* Ansible installation and configuration
+* Ansible inventory management
+* Ansible playbook-based application deployment
+* JAR deployment
+* Linux systemd service management
+* Deployment validation
+* GitHub-hosted runner usage as a temporary deployment environment
+
+---
+
+# ⚠️ Production Consideration
+
+Using a GitHub-hosted runner as both the CI environment and deployment target is suitable for this demonstration because the runner is temporary and the objective is to demonstrate the Ansible deployment process.
+
+In a production architecture, the recommended model would be:
+
+```text
+GitHub Actions Runner
+        │
+        │ SSH / WinRM
+        ▼
+Persistent Application VM
+        │
+        ▼
+Java Application
+```
+
+The Ansible inventory would then contain the actual VM hostname/IP, and Ansible would remotely deploy the application.
+
+---
+
+# 📌 Key Learning
+
+This project demonstrates how a CI/CD pipeline can move an application through the complete lifecycle:
+
+```text
+Source Code
+     ↓
+Build
+     ↓
+Test
+     ↓
+Code Quality
+     ↓
+Artifact (JAR)
+     ↓
+Ansible Automation
+     ↓
+VM Deployment
+     ↓
+Service Validation
+```
+
+The key concept is **build once, deploy the generated artifact using automation** rather than rebuilding the application during deployment.
