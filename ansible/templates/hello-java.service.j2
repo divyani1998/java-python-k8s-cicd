@@ -1,0 +1,18 @@
+[Unit]
+Description={{ app_name }} Java Application
+After=network.target
+
+[Service]
+Type=simple
+User={{ app_user }}
+WorkingDirectory={{ app_directory }}
+
+ExecStart=/usr/bin/java -jar {{ app_directory }}/{{ app_jar }}
+
+Restart=always
+RestartSec=10
+
+SuccessExitStatus=143
+
+[Install]
+WantedBy=multi-user.target
